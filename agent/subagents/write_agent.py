@@ -32,7 +32,7 @@ async def write_agent_node(state: AgentState) -> dict:
     )
 
     inner_agent = create_react_agent(
-        llm, [db_create, db_update, db_delete], state_modifier=system_prompt
+        llm, [db_create, db_update, db_delete], prompt=system_prompt
     )
 
     result = await inner_agent.ainvoke(

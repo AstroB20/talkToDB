@@ -31,7 +31,7 @@ async def query_agent_node(state: AgentState) -> dict:
         google_api_key=os.environ["GEMINI_API_KEY"],
     )
 
-    inner_agent = create_react_agent(llm, [db_read], state_modifier=system_prompt)
+    inner_agent = create_react_agent(llm, [db_read], prompt=system_prompt)
 
     result = await inner_agent.ainvoke(
         {"messages": [HumanMessage(content=f"[Target database: {db_alias}]\n\n{user_text}")]}
