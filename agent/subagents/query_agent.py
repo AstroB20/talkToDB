@@ -27,7 +27,7 @@ async def query_agent_node(state: AgentState) -> dict:
     db_alias = state.get("db_alias", "")
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash",
+        model="gemini-2.5-flash",
         google_api_key=os.environ["GEMINI_API_KEY"],
     )
 
