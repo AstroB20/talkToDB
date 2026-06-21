@@ -31,16 +31,9 @@ RUN pip install --no-cache-dir \
 COPY ui/ ./ui/
 
 # ── Streamlit config — disable telemetry, enable CORS for Cloud Run ────────
-RUN mkdir -p /app/.streamlit
-COPY --chown=appuser:appuser <<'EOF' /app/.streamlit/config.toml
-[server]
-headless = true
-enableCORS = false
-enableXsrfProtection = false
-
-[browser]
-gatherUsageStats = false
-EOF
+RUN mkdir -p /app/.streamlit && \
+    printf '[server]\nheadless = true\nenableCORS = false\nenableXsrfProtection = false\n\n[browser]\ngatherUsageStats = false\n' \
+    > /app/.streamlit/config.toml
 
 # ── Create non-root user ──────────────────────────────────────────────────
 RUN adduser --disabled-password --gecos "" --uid 1001 appuser \
