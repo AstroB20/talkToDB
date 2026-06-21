@@ -11,13 +11,6 @@ steps:
 
   # -- Build -----------------------------------------------------------------
 
-  - id: build-mcp
-    name: gcr.io/cloud-builders/docker
-    waitFor: ["-"]
-    args: [build, -f, Dockerfile.mcp,
-           -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-mcp:$COMMIT_SHA",
-           -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-mcp:latest", .]
-
   - id: build-api
     name: gcr.io/cloud-builders/docker
     waitFor: ["-"]
@@ -34,11 +27,6 @@ steps:
 
   # -- Push ------------------------------------------------------------------
 
-  - id: push-mcp
-    name: gcr.io/cloud-builders/docker
-    waitFor: [build-mcp]
-    args: [push, --all-tags, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-mcp"]
-
   - id: push-api
     name: gcr.io/cloud-builders/docker
     waitFor: [build-api]
@@ -49,52 +37,28 @@ steps:
     waitFor: [build-ui]
     args: [push, --all-tags, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-ui"]
 
-  # -- Deploy MCP ------------------------------------------------------------
+  # -- Deploy API ------------------------------------------------------------
 
-  - id: deploy-mcp
+  - id: deploy-api
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    waitFor: [push-mcp]
+    waitFor: [push-api]
     entrypoint: gcloud
     args:
       - run
       - deploy
-      - talktodb-mcp
-      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-mcp:$COMMIT_SHA
+      - talktodb-api
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-api:$COMMIT_SHA
       - --region=${_REGION}
       - --platform=managed
       - --no-allow-unauthenticated
       - --ingress=internal
-      - --memory=512Mi
+      - --memory=1Gi
       - --cpu=1
       - --min-instances=0
-      - --max-instances=5
-      - --timeout=60
-      - --set-env-vars=AGENT_ROLE=${_AGENT_ROLE},MCP_HOST=0.0.0.0
-
-  # -- Deploy API (injects MCP URL) ------------------------------------------
-
-  - id: deploy-api
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    waitFor: [deploy-mcp, push-api]
-    entrypoint: bash
-    args:
-      - -c
-      - |
-          MCP_URL=$(gcloud run services describe talktodb-mcp \
-            --region=${_REGION} \
-            --format='value(status.url)')
-          gcloud run deploy talktodb-api \
-            --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-api:$COMMIT_SHA \
-            --region=${_REGION} \
-            --platform=managed \
-            --no-allow-unauthenticated \
-            --ingress=internal \
-            --memory=1Gi \
-            --cpu=2 \
-            --min-instances=0 \
-            --max-instances=10 \
-            --timeout=300 \
-            --set-env-vars="AGENT_ROLE=${_AGENT_ROLE},MCP_SERVER_URL=$${MCP_URL}/sse"
+      - --max-instances=10
+      - --timeout=300
+      - --set-env-vars=AGENT_ROLE=${_AGENT_ROLE}
+      - --set-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest
 
   # -- Deploy UI (injects API URL) -------------------------------------------
 
@@ -117,11 +81,10 @@ steps:
             --memory=512Mi \
             --cpu=1 \
             --min-instances=0 \
-            --max-instances=10 \
+            --max-instances=5 \
             --timeout=60 \
             --set-env-vars="API_URL=$${API_URL}"
 
 images:
-  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-mcp:$COMMIT_SHA
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-api:$COMMIT_SHA
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-ui:$COMMIT_SHA
