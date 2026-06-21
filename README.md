@@ -1,4 +1,4 @@
-# TalktoDB
+# TalktoDB-
 
 A LangGraph-powered agent that lets you query and manage CSV and JSON datasets using plain English. Drop any file from Kaggle (or anywhere else) into the `data/` folder — or upload it through the UI — and start asking questions immediately.
 
@@ -42,7 +42,7 @@ START → orchestrator → schema_agent  → END
 
 ## Project Structure
 
-```
+````
 LangGraph/
 ├── .env.example
 ├── requirements.txt
@@ -79,7 +79,7 @@ LangGraph/
 │   └── main.py                # FastAPI: /chat, /upload, /databases, /schema, /audit
 └── ui/
     └── app.py                 # Streamlit chat UI with upload + demo button
-```
+````
 
 ---
 
@@ -152,7 +152,7 @@ docker compose up --build
 ```
 
 - API → [http://localhost:8000](http://localhost:8000) (docs at `/docs`)
-- UI  → [http://localhost:8501](http://localhost:8501)
+- UI → [http://localhost:8501](http://localhost:8501)
 
 Uploaded files are stored on the host via the `./data` volume mount and survive container restarts.
 
@@ -160,16 +160,16 @@ Uploaded files are stored on the host via the `./data` volume mount and survive 
 
 ## API Endpoints
 
-| Method | Path                  | Description                                  |
-|--------|-----------------------|----------------------------------------------|
-| GET    | `/health`             | Liveness check                               |
-| GET    | `/databases`          | List all available datasets                  |
-| GET    | `/schema/{alias}`     | Column schema for a dataset                  |
-| POST   | `/upload`             | Upload a `.csv` or `.json` file              |
-| DELETE | `/upload/{filename}`  | Remove an uploaded file                      |
-| POST   | `/chat`               | Stream agent response (SSE)                  |
-| GET    | `/audit`              | Tail the audit log (last 50 entries)         |
-| GET    | `/graph`              | Agent topology (nodes + edges)               |
+| Method | Path                 | Description                          |
+| ------ | -------------------- | ------------------------------------ |
+| GET    | `/health`            | Liveness check                       |
+| GET    | `/databases`         | List all available datasets          |
+| GET    | `/schema/{alias}`    | Column schema for a dataset          |
+| POST   | `/upload`            | Upload a `.csv` or `.json` file      |
+| DELETE | `/upload/{filename}` | Remove an uploaded file              |
+| POST   | `/chat`              | Stream agent response (SSE)          |
+| GET    | `/audit`             | Tail the audit log (last 50 entries) |
+| GET    | `/graph`             | Agent topology (nodes + edges)       |
 
 Interactive docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
@@ -192,9 +192,9 @@ databases:
 ## Supported File Formats
 
 | Format | Query engine | Write-back format          |
-|--------|-------------|----------------------------|
-| CSV    | DuckDB      | CSV with header row        |
-| JSON   | DuckDB      | Top-level array of objects |
+| ------ | ------------ | -------------------------- |
+| CSV    | DuckDB       | CSV with header row        |
+| JSON   | DuckDB       | Top-level array of objects |
 
 SQL is standard DuckDB SQL. The table name is always the file stem (e.g. `sales_data.csv` → `SELECT * FROM sales_data`).
 
@@ -202,12 +202,12 @@ SQL is standard DuckDB SQL. The table name is always the file stem (e.g. `sales_
 
 ## Agent Tools
 
-| Tool        | Operation | Notes                                    |
-|-------------|-----------|------------------------------------------|
-| `db_read`   | SELECT    | Rejects non-SELECT queries               |
-| `db_create` | INSERT    | Writes back to source file               |
-| `db_update` | UPDATE    | `where_conditions` required              |
-| `db_delete` | DELETE    | Requires explicit `confirmed=True`       |
+| Tool        | Operation | Notes                              |
+| ----------- | --------- | ---------------------------------- |
+| `db_read`   | SELECT    | Rejects non-SELECT queries         |
+| `db_create` | INSERT    | Writes back to source file         |
+| `db_update` | UPDATE    | `where_conditions` required        |
+| `db_delete` | DELETE    | Requires explicit `confirmed=True` |
 
 ---
 
@@ -215,12 +215,12 @@ SQL is standard DuckDB SQL. The table name is always the file stem (e.g. `sales_
 
 The agent embeds structured output in fenced ` ```data ``` ` blocks. The UI parses and renders them automatically:
 
-| Data shape                              | Rendered as        |
-|-----------------------------------------|--------------------|
-| Two columns, one numeric                | Plotly bar chart   |
-| Time/sequence column + numeric          | Plotly line chart  |
-| Small set of named proportions          | Plotly pie chart   |
-| Anything else                           | Interactive table  |
+| Data shape                     | Rendered as       |
+| ------------------------------ | ----------------- |
+| Two columns, one numeric       | Plotly bar chart  |
+| Time/sequence column + numeric | Plotly line chart |
+| Small set of named proportions | Plotly pie chart  |
+| Anything else                  | Interactive table |
 
 ---
 
@@ -229,7 +229,14 @@ The agent embeds structured output in fenced ` ```data ``` ` blocks. The UI pars
 Every operation is appended to `logs/audit.log` as JSONL:
 
 ```json
-{"timestamp": "2026-06-21T10:23:45+00:00", "operation": "read", "db_alias": "titanic", "query": "SELECT Pclass, COUNT(*) FROM titanic GROUP BY Pclass", "row_count": 3, "success": true}
+{
+  "timestamp": "2026-06-21T10:23:45+00:00",
+  "operation": "read",
+  "db_alias": "titanic",
+  "query": "SELECT Pclass, COUNT(*) FROM titanic GROUP BY Pclass",
+  "row_count": 3,
+  "success": true
+}
 ```
 
 View the last 100 entries from the Streamlit sidebar under **📜 View Audit Log**.
@@ -241,7 +248,6 @@ View the last 100 entries from the Streamlit sidebar under **📜 View Audit Log
 See the one-time setup instructions at the top of `cloudbuild.yaml`. After setup, every push to `main` triggers a full build and deploy automatically via Cloud Build. The public UI URL is printed at the end of each build log.
 
 > **Note on uploaded files in Cloud Run:** containers are ephemeral. Mount a Cloud Storage FUSE bucket to `/app/data` for persistent file storage in production.
-
 
 ---
 
@@ -277,7 +283,7 @@ Streamlit UI  ──(HTTP/SSE)──►  FastAPI Backend  ──►  LangGraph A
 
 ## Project Structure
 
-```
+````
 LangGraph/
 ├── .env.example               # Environment variable template
 ├── requirements.txt
@@ -302,7 +308,7 @@ LangGraph/
 │   └── main.py                # FastAPI: /chat, /databases, /schema, /audit
 └── ui/
     └── app.py                 # Streamlit chat UI with chart rendering
-```
+````
 
 ---
 
@@ -355,16 +361,19 @@ databases:
 ### 5. Run (three separate terminals)
 
 **Terminal 1 — MCP server**
+
 ```powershell
 python mcp_server/server.py
 ```
 
 **Terminal 2 — FastAPI backend**
+
 ```powershell
 uvicorn api.main:app --port 8000
 ```
 
 **Terminal 3 — Streamlit UI**
+
 ```powershell
 streamlit run ui/app.py
 ```
@@ -377,11 +386,11 @@ Then open [http://localhost:8501](http://localhost:8501) in your browser.
 
 Roles and their permissions are defined in `config/access_control.yaml`:
 
-| Role     | Read | Create | Update | Delete |
-|----------|:----:|:------:|:------:|:------:|
-| analyst  | ✅   | ❌     | ❌     | ❌     |
-| editor   | ✅   | ✅     | ✅     | ❌     |
-| admin    | ✅   | ✅     | ✅     | ✅     |
+| Role    | Read | Create | Update | Delete |
+| ------- | :--: | :----: | :----: | :----: |
+| analyst |  ✅  |   ❌   |   ❌   |   ❌   |
+| editor  |  ✅  |   ✅   |   ✅   |   ❌   |
+| admin   |  ✅  |   ✅   |   ✅   |   ✅   |
 
 Set the active role via the `AGENT_ROLE` environment variable (in `.env`) before starting the servers. The agent is automatically given only the MCP tools its role permits.
 
@@ -389,24 +398,24 @@ Set the active role via the `AGENT_ROLE` environment variable (in `.env`) before
 
 ## MCP Tools
 
-| Tool        | Operation | SQL Statement | Notes |
-|-------------|-----------|---------------|-------|
-| `db_read`   | Read      | SELECT        | Rejects non-SELECT queries |
-| `db_create` | Create    | INSERT        | Fully parameterised |
+| Tool        | Operation | SQL Statement | Notes                       |
+| ----------- | --------- | ------------- | --------------------------- |
+| `db_read`   | Read      | SELECT        | Rejects non-SELECT queries  |
+| `db_create` | Create    | INSERT        | Fully parameterised         |
 | `db_update` | Update    | UPDATE        | `where_conditions` required |
-| `db_delete` | Delete    | DELETE        | Requires `confirmed=True` |
+| `db_delete` | Delete    | DELETE        | Requires `confirmed=True`   |
 
 ---
 
 ## API Endpoints
 
-| Method | Path                  | Description                          |
-|--------|-----------------------|--------------------------------------|
-| GET    | `/health`             | Liveness check + current role        |
-| GET    | `/databases`          | List all configured DB aliases       |
-| GET    | `/schema/{db_alias}`  | Table/column schema for one database |
-| POST   | `/chat`               | Stream agent response (SSE)          |
-| GET    | `/audit`              | Tail the audit log (last 50 entries) |
+| Method | Path                 | Description                          |
+| ------ | -------------------- | ------------------------------------ |
+| GET    | `/health`            | Liveness check + current role        |
+| GET    | `/databases`         | List all configured DB aliases       |
+| GET    | `/schema/{db_alias}` | Table/column schema for one database |
+| POST   | `/chat`              | Stream agent response (SSE)          |
+| GET    | `/audit`             | Tail the audit log (last 50 entries) |
 
 Interactive API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
@@ -430,7 +439,15 @@ The agent decides which format to use based on the result shape.
 Every database operation is appended to `logs/audit.log` as a JSONL entry:
 
 ```json
-{"timestamp": "2026-06-15T10:23:45+00:00", "role": "admin", "operation": "delete", "db_alias": "my_bigquery", "query": "DELETE FROM orders WHERE id = @p0", "row_count": -1, "success": true}
+{
+  "timestamp": "2026-06-15T10:23:45+00:00",
+  "role": "admin",
+  "operation": "delete",
+  "db_alias": "my_bigquery",
+  "query": "DELETE FROM orders WHERE id = @p0",
+  "row_count": -1,
+  "success": true
+}
 ```
 
 View the last 100 entries from the Streamlit sidebar, or query `/audit` directly.
@@ -440,10 +457,12 @@ View the last 100 entries from the Streamlit sidebar, or query `/audit` directly
 ## Extending
 
 **Add a new role**
+
 1. Add an entry to `config/access_control.yaml` with the desired `allowed_operations`
 2. Set `AGENT_ROLE=your_new_role` in `.env`
 
 **Add visualisation tools (planned)**
+
 - HTML report generation tool
 - Markdown export tool
 - These will be added as additional MCP tools in `mcp_server/server.py`
