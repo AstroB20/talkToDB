@@ -88,13 +88,19 @@ _graph = _build_graph()
 async def stream_agent_response(
     user_message: str,
     db_alias: str,
-) -> AsyncIterator[str]:
+) -> AsyncIterator[dict]:
     """
-    Stream the final agent response token-by-token.
-    Only tokens from user-facing nodes (schema_agent, write_agent, viz_agent)
-    are yielded — orchestrator and query_agent internals are suppressed.
+    Stream typed events from the agent graph.
+
+    Yields dicts with a `type` key:
+      - {"type": "node_enter", "node": str}          — an agent node started
+      - {"type": "tool_call",  "tool": str, "input": dict}  — a tool was invoked
+      - {"type": "tool_result","tool": str, "output": str}  — tool returned
+      - {"type": "token",      "text": str}           — a streamed text token
     """
     _USER_FACING_NODES = {"schema_agent", "write_agent", "viz_agent"}
+    _ALL_NODES = {"orchestrator", "schema_agent", "query_agent", "write_agent", "viz_agent"}
+    _seen_nodes: set[str] = set()
 
     initial_state: AgentState = {
         "messages": [HumanMessage(content=user_message)],
@@ -106,11 +112,31 @@ async def stream_agent_response(
     }
 
     async for event in _graph.astream_events(initial_state, version="v2"):
-        if event["event"] != "on_chat_model_stream":
-            continue
+        event_type = event["event"]
         node = event.get("metadata", {}).get("langgraph_node", "")
-        if node not in _USER_FACING_NODES:
-            continue
-        chunk = event["data"]["chunk"]
-        if chunk.content:
-            yield chunk.content
+
+        # Emit a node_enter once per node, for all known nodes
+        if event_type == "on_chain_start" and node in _ALL_NODES and node not in _seen_nodes:
+            _seen_nodes.add(node)
+            yield {"type": "node_enter", "node": node}
+
+        # Tool calls — emit for any node (tool calls only happen in query/write agents)
+        elif event_type == "on_tool_start" and node:
+            tool_name = event.get("name", "")
+            tool_input = event.get("data", {}).get("input", {})
+            yield {"type": "tool_call", "tool": tool_name, "input": tool_input}
+
+        # Tool results
+        elif event_type == "on_tool_end" and node:
+            tool_name = event.get("name", "")
+            tool_output = event.get("data", {}).get("output", "")
+            # output may be a ToolMessage object — get its content string
+            if hasattr(tool_output, "content"):
+                tool_output = tool_output.content
+            yield {"type": "tool_result", "tool": tool_name, "output": str(tool_output)}
+
+        # Streamed tokens — only from user-facing nodes
+        elif event_type == "on_chat_model_stream" and node in _USER_FACING_NODES:
+            chunk = event["data"]["chunk"]
+            if chunk.content:
+                yield {"type": "token", "text": chunk.content}

@@ -125,15 +125,15 @@ def delete_file(filename: str):
 async def chat(request: ChatRequest):
     async def event_generator() -> AsyncIterator[dict]:
         try:
-            async for token in stream_agent_response(
+            async for event in stream_agent_response(
                 request.message,
                 request.db_alias,
             ):
-                yield {"data": json.dumps({"token": token})}
+                yield {"data": json.dumps(event)}
         except PermissionError as exc:
-            yield {"data": json.dumps({"error": str(exc)})}
+            yield {"data": json.dumps({"type": "error", "message": str(exc)})}
         except Exception as exc:
-            yield {"data": json.dumps({"error": f"Agent error: {exc}"})}
+            yield {"data": json.dumps({"type": "error", "message": f"Agent error: {exc}"})}
         yield {"data": "[DONE]"}
 
     return EventSourceResponse(event_generator())
