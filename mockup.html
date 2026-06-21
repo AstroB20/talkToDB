@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TalktoDB — Mockup</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Reset & Tokens ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --surface2:  #22263a;
+      --border:    #2e3352;
+      --accent:    #6c63ff;
+      --accent2:   #00d4aa;
+      --danger:    #ff5c5c;
+      --warn:      #f5a623;
+      --text:      #e2e4f0;
+      --muted:     #7a7f9a;
+      --user-bg:   #6c63ff22;
+      --agent-bg:  #1a1d27;
+      --radius:    10px;
+      --font:      'Segoe UI', system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Top Bar ─────────────────────────────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .topbar-logo { font-size: 20px; }
+    .topbar-title { font-size: 16px; font-weight: 700; letter-spacing: .5px; }
+    .topbar-title span { color: var(--accent); }
+
+    .role-badge {
+      margin-left: auto;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+    }
+    .role-badge.analyst  { background: #1a3a2a; color: var(--accent2); border: 1px solid var(--accent2); }
+    .role-badge.editor   { background: #2a2a1a; color: var(--warn);    border: 1px solid var(--warn); }
+    .role-badge.admin    { background: #2a1a2a; color: #c084fc;        border: 1px solid #c084fc; }
+
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent2);
+      box-shadow: 0 0 6px var(--accent2);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── Layout ──────────────────────────────────────────────────────────── */
+    .layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────────────────────── */
+    .sidebar {
+      width: 260px;
+      min-width: 260px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 16px 12px;
+      overflow-y: auto;
+    }
+
+    .sidebar-section { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin: 8px 0 4px; }
+
+    .db-select {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .db-select:focus { outline: none; border-color: var(--accent); }
+
+    .sidebar-btn {
+      width: 100%;
+      padding: 8px 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      text-align: left;
+      transition: background .15s, border-color .15s;
+    }
+    .sidebar-btn:hover { background: var(--surface); border-color: var(--accent); }
+    .sidebar-btn.active { border-color: var(--accent); color: var(--accent); }
+
+    /* Schema tree */
+    .schema-tree { display: none; flex-direction: column; gap: 6px; margin-top: 4px; }
+    .schema-tree.open { display: flex; }
+    .schema-table { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .schema-table-head {
+      display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      border-bottom: 1px solid var(--border);
+    }
+    .schema-table-head:hover { background: #ffffff08; }
+    .schema-cols { padding: 4px 10px 8px; display: flex; flex-direction: column; gap: 2px; }
+    .schema-col { font-size: 11px; color: var(--muted); padding: 1px 0; }
+    .schema-col .col-name { color: var(--text); }
+    .schema-col .col-type { color: var(--accent2); font-size: 10px; margin-left: 4px; }
+
+    /* Agent graph */
+    .graph-viz {
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-top: 4px;
+    }
+    .graph-viz.open { display: flex; }
+    .graph-node {
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 8px; border-radius: 6px;
+      font-size: 11px; font-weight: 600;
+    }
+    .graph-node.orchestrator { background: #6c63ff22; color: var(--accent); }
+    .graph-node.schema   { background: #00d4aa22; color: var(--accent2); }
+    .graph-node.query    { background: #3b82f622; color: #60a5fa; }
+    .graph-node.write    { background: #f5a62322; color: var(--warn); }
+    .graph-node.viz      { background: #c084fc22; color: #c084fc; }
+    .graph-arrow { font-size: 10px; color: var(--muted); padding-left: 14px; }
+
+    /* Audit panel */
+    .audit-panel { display: none; flex-direction: column; gap: 4px; margin-top: 4px; }
+    .audit-panel.open { display: flex; }
+    .audit-entry {
+      font-size: 10px; padding: 5px 8px; border-radius: 6px;
+      border-left: 2px solid transparent;
+      background: var(--surface2);
+    }
+    .audit-entry.read   { border-color: #60a5fa; }
+    .audit-entry.create { border-color: var(--accent2); }
+    .audit-entry.update { border-color: var(--warn); }
+    .audit-entry.delete { border-color: var(--danger); }
+    .audit-op { font-weight: 700; text-transform: uppercase; font-size: 9px; }
+    .audit-ts { color: var(--muted); font-size: 9px; }
+    .audit-q  { color: var(--muted); margin-top: 1px; word-break: break-all; }
+
+    /* ── Chat Panel ──────────────────────────────────────────────────────── */
+    .chat-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .msg {
+      display: flex;
+      gap: 10px;
+      max-width: 820px;
+    }
+    .msg.user { flex-direction: row-reverse; align-self: flex-end; }
+    .msg.agent { align-self: flex-start; }
+
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; flex-shrink: 0;
+    }
+    .msg.user  .avatar { background: var(--accent); }
+    .msg.agent .avatar { background: var(--surface2); border: 1px solid var(--border); }
+
+    .bubble {
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .msg.user  .bubble { background: var(--user-bg); border: 1px solid #6c63ff44; }
+    .msg.agent .bubble { background: var(--agent-bg); border: 1px solid var(--border); }
+
+    /* routing badge */
+    .route-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+      margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px;
+    }
+    .route-badge.schema  { background: #00d4aa18; color: var(--accent2); border: 1px solid #00d4aa44; }
+    .route-badge.query   { background: #3b82f618; color: #60a5fa;        border: 1px solid #3b82f644; }
+    .route-badge.write   { background: #f5a62318; color: var(--warn);    border: 1px solid #f5a62344; }
+    .route-badge.viz     { background: #c084fc18; color: #c084fc;        border: 1px solid #c084fc44; }
+
+    /* ── Table ───────────────────────────────────────────────────────────── */
+    .data-table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin: 8px 0;
+    }
+    .data-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    .data-table th {
+      background: var(--surface2); padding: 7px 12px; text-align: left;
+      font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .data-table td { padding: 6px 12px; border-bottom: 1px solid #1e2235; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: #ffffff05; }
+
+    /* ── Chart ───────────────────────────────────────────────────────────── */
+    .chart-wrap { padding: 8px 0; }
+    .chart-wrap canvas { max-height: 220px; }
+
+    /* ── Typing indicator ────────────────────────────────────────────────── */
+    .typing { display: flex; gap: 4px; align-items: center; padding: 6px 0; }
+    .typing span {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--muted); animation: bounce .8s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: .15s; }
+    .typing span:nth-child(3) { animation-delay: .3s; }
+    @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-6px)} }
+
+    /* ── Input Bar ───────────────────────────────────────────────────────── */
+    .input-bar {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      display: flex; gap: 10px; align-items: flex-end;
+    }
+    .input-wrap { flex: 1; position: relative; }
+    textarea {
+      width: 100%;
+      resize: none;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      padding: 10px 14px;
+      outline: none;
+      line-height: 1.5;
+      max-height: 120px;
+      overflow-y: auto;
+      transition: border-color .15s;
+    }
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: var(--muted); }
+
+    .send-btn {
+      width: 42px; height: 42px; border-radius: var(--radius);
+      background: var(--accent); border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 18px; flex-shrink: 0;
+      transition: opacity .15s, transform .1s;
+    }
+    .send-btn:hover { opacity: .85; }
+    .send-btn:active { transform: scale(.95); }
+
+    /* ── Welcome State ───────────────────────────────────────────────────── */
+    .welcome {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 40px;
+      text-align: center;
+    }
+    .welcome-icon { font-size: 48px; }
+    .welcome h2 { font-size: 22px; font-weight: 700; }
+    .welcome p  { color: var(--muted); font-size: 14px; max-width: 480px; line-height: 1.7; }
+    .suggestions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; }
+    .suggestion-chip {
+      padding: 8px 14px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 20px;
+      font-size: 13px; cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .suggestion-chip:hover { border-color: var(--accent); background: var(--user-bg); }
+
+    /* scrollbar */
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Top Bar ──────────────────────────────────────────────────────────── -->
+<div class="topbar">
+  <span class="topbar-logo">🗄️</span>
+  <span class="topbar-title">Talkto<span>DB</span></span>
+  <div class="status-dot" title="MCP Server connected"></div>
+  <span style="font-size:12px;color:var(--muted)">MCP live</span>
+  <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+    <select id="roleSelect" class="db-select" style="width:auto" onchange="switchRole(this.value)">
+      <option value="analyst">analyst</option>
+      <option value="editor">editor</option>
+      <option value="admin">admin</option>
+    </select>
+    <span id="roleBadge" class="role-badge analyst">analyst</span>
+  </div>
+</div>
+
+<!-- ── Layout ───────────────────────────────────────────────────────────── -->
+<div class="layout">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+
+    <div class="sidebar-section">Target Database</div>
+    <select id="dbSelect" class="db-select">
+      <option value="local_db">local_db  (sqlite)</option>
+      <option value="analytics_pg">analytics_pg  (postgres)</option>
+      <option value="reporting_mysql">reporting_mysql  (mysql)</option>
+    </select>
+
+    <div class="sidebar-section" style="margin-top:12px">Schema</div>
+    <button class="sidebar-btn" onclick="togglePanel('schema')">🔍 View Schema</button>
+    <div class="schema-tree" id="schemaPanel">
+      <div class="schema-table">
+        <div class="schema-table-head" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display==='none'?'flex':'none'">
+          📋 employees <span style="margin-left:auto;color:var(--muted);font-size:10px">6 cols</span>
+        </div>
+        <div class="schema-cols">
+          <div class="schema-col"><span class="col-name">id</span><span class="col-type">INTEGER PK</span></div>
+          <div class="schema-col"><span class="col-name">name</span><span class="col-type">TEXT</span></div>
+          <div class="schema-col"><span class="col-name">department</span><span class="col-type">TEXT</span></div>
+          <div class="schema-col"><span class="col-name">salary</span><span class="col-type">REAL</span></div>
+          <div class="schema-col"><span class="col-name">hire_date</span><span class="col-type">DATE</span></div>
+          <div class="schema-col"><span class="col-name">active</span><span class="col-type">INTEGER</span></div>
+        </div>
+      </div>
+      <div class="schema-table">
+        <div class="schema-table-head" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display==='none'?'flex':'none'">
+          📋 orders <span style="margin-left:auto;color:var(--muted);font-size:10px">5 cols</span>
+        </div>
+        <div class="schema-cols">
+          <div class="schema-col"><span class="col-name">id</span><span class="col-type">INTEGER PK</span></div>
+          <div class="schema-col"><span class="col-name">employee_id</span><span class="col-type">INTEGER FK</span></div>
+          <div class="schema-col"><span class="col-name">product</span><span class="col-type">TEXT</span></div>
+          <div class="schema-col"><span class="col-name">amount</span><span class="col-type">REAL</span></div>
+          <div class="schema-col"><span class="col-name">order_date</span><span class="col-type">DATE</span></div>
+        </div>
+      </div>
+      <div class="schema-table">
+        <div class="schema-table-head">
+          📋 departments <span style="margin-left:auto;color:var(--muted);font-size:10px">3 cols</span>
+        </div>
+        <div class="schema-cols">
+          <div class="schema-col"><span class="col-name">id</span><span class="col-type">INTEGER PK</span></div>
+          <div class="schema-col"><span class="col-name">name</span><span class="col-type">TEXT</span></div>
+          <div class="schema-col"><span class="col-name">budget</span><span class="col-type">REAL</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section" style="margin-top:12px">Agent Graph</div>
+    <button class="sidebar-btn" onclick="togglePanel('graph')">🕸️ View A2A Graph</button>
+    <div class="graph-viz" id="graphPanel">
+      <div class="graph-node orchestrator">🎯 Orchestrator</div>
+      <div class="graph-arrow">├─ intent: schema → <span style="color:var(--accent2)">Schema Agent</span></div>
+      <div class="graph-arrow">├─ intent: read → <span style="color:#60a5fa">Query Agent</span></div>
+      <div class="graph-arrow">└─ intent: write → <span style="color:var(--warn)">Write Agent</span></div>
+      <div class="graph-node query" style="margin-top:4px">🔍 Query Agent</div>
+      <div class="graph-arrow">└─ always → <span style="color:#c084fc">Viz Agent</span></div>
+      <div class="graph-node schema" style="margin-top:4px">📐 Schema Agent → END</div>
+      <div class="graph-node write"  style="margin-top:4px">✏️ Write Agent → END</div>
+      <div class="graph-node viz"    style="margin-top:4px">📊 Viz Agent → END</div>
+    </div>
+
+    <div class="sidebar-section" style="margin-top:12px">Audit Log</div>
+    <button class="sidebar-btn" onclick="togglePanel('audit')">📜 View Audit Log</button>
+    <div class="audit-panel" id="auditPanel">
+      <div class="audit-entry read">
+        <div class="audit-ts">2026-06-16 09:14:32 UTC</div>
+        <div class="audit-op" style="color:#60a5fa">read</div>
+        <div class="audit-q">SELECT department, COUNT(*) FROM employees GROUP BY department</div>
+      </div>
+      <div class="audit-entry read">
+        <div class="audit-ts">2026-06-16 09:15:01 UTC</div>
+        <div class="audit-op" style="color:#60a5fa">read</div>
+        <div class="audit-q">SELECT name, salary FROM employees WHERE salary > 75000 LIMIT 10</div>
+      </div>
+      <div class="audit-entry create">
+        <div class="audit-ts">2026-06-16 09:17:44 UTC</div>
+        <div class="audit-op" style="color:var(--accent2)">create</div>
+        <div class="audit-q">INSERT INTO employees (name, department, salary) VALUES (?, ?, ?)</div>
+      </div>
+      <div class="audit-entry delete">
+        <div class="audit-ts">2026-06-16 09:19:05 UTC</div>
+        <div class="audit-op" style="color:var(--danger)">delete</div>
+        <div class="audit-q">DELETE FROM orders WHERE id = ?</div>
+      </div>
+    </div>
+
+    <div style="margin-top:auto">
+      <button class="sidebar-btn" onclick="clearChat()" style="color:var(--danger);border-color:#ff5c5c44">
+        🗑️ Clear Chat
+      </button>
+    </div>
+  </div>
+
+  <!-- Chat Panel -->
+  <div class="chat-panel">
+
+    <!-- Welcome screen -->
+    <div class="welcome" id="welcomeScreen">
+      <div class="welcome-icon">🤖</div>
+      <h2>TalktoDB</h2>
+      <p>Ask questions in plain English. The orchestrator routes your request to the right specialist — schema, query, write, or visualisation agent.</p>
+      <div class="suggestions">
+        <div class="suggestion-chip" onclick="sendSuggestion(this.innerText)">What tables exist?</div>
+        <div class="suggestion-chip" onclick="sendSuggestion(this.innerText)">Show employees by department as a chart</div>
+        <div class="suggestion-chip" onclick="sendSuggestion(this.innerText)">Who earns more than $80,000?</div>
+        <div class="suggestion-chip" onclick="sendSuggestion(this.innerText)">Add a new employee called Jane Doe in Engineering</div>
+        <div class="suggestion-chip" onclick="sendSuggestion(this.innerText)">What columns does the orders table have?</div>
+        <div class="suggestion-chip" onclick="sendSuggestion(this.innerText)">Total order amount per product</div>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="messages" id="messages" style="display:none"></div>
+
+    <!-- Input bar -->
+    <div class="input-bar">
+      <div class="input-wrap">
+        <textarea id="input" rows="1" placeholder="Ask about your database…"
+          onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      </div>
+      <button class="send-btn" onclick="sendMessage()" title="Send">➤</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ── Demo data ──────────────────────────────────────────────────────────── */
+const SCENARIOS = {
+
+  "what tables exist": {
+    route: "schema",
+    agent: "schema_agent",
+    text: "The **local_db** database has 3 tables:\n\n- **employees** — stores staff records (id, name, department, salary, hire_date, active)\n- **orders** — tracks customer orders linked to employees (id, employee_id, product, amount, order_date)\n- **departments** — lists departments and their budgets (id, name, budget)"
+  },
+
+  "what columns does the orders table have": {
+    route: "schema",
+    agent: "schema_agent",
+    text: "The **orders** table has 5 columns:\n\n- `id` — INTEGER, primary key\n- `employee_id` — INTEGER, foreign key → employees.id\n- `product` — TEXT\n- `amount` — REAL\n- `order_date` — DATE"
+  },
+
+  "show employees by department as a chart": {
+    route: "query",
+    agent: "viz_agent",
+    text: "Here are the employee counts per department:",
+    chart: {
+      type: "bar",
+      labels: ["Engineering", "Sales", "HR", "Marketing", "Finance"],
+      data:   [12, 8, 4, 6, 5],
+      label: "Headcount"
+    },
+    summary: "Engineering is the largest department with 12 employees, followed by Sales (8) and Marketing (6)."
+  },
+
+  "who earns more than $80,000": {
+    route: "query",
+    agent: "viz_agent",
+    text: "Found 5 employees earning more than $80,000:",
+    table: {
+      headers: ["Name", "Department", "Salary"],
+      rows: [
+        ["Alice Chen",     "Engineering", "$120,000"],
+        ["Bob Martinez",   "Finance",      "$95,500"],
+        ["Carol Singh",    "Engineering",  "$88,200"],
+        ["David Kim",      "Sales",        "$82,000"],
+        ["Eva Okonkwo",    "Engineering",  "$81,500"],
+      ]
+    },
+    summary: "All high earners are concentrated in Engineering and Finance."
+  },
+
+  "total order amount per product": {
+    route: "query",
+    agent: "viz_agent",
+    text: "Total order amounts per product:",
+    chart: {
+      type: "bar",
+      labels: ["Laptop", "Monitor", "Keyboard", "Headset", "Webcam"],
+      data:   [48200, 32500, 12800, 9400, 5600],
+      label: "Total Amount ($)"
+    },
+    summary: "Laptops account for the largest revenue at $48,200, roughly 44% of all orders."
+  },
+
+  "add a new employee called jane doe in engineering": {
+    route: "write",
+    agent: "write_agent",
+    text: "I'm about to insert the following record into the **employees** table:\n\n- **name:** Jane Doe\n- **department:** Engineering\n- **salary:** *(not specified — do you want to set a salary?)*\n- **hire_date:** today (2026-06-16)\n- **active:** 1\n\nPlease confirm to proceed.",
+    confirm: true
+  },
+
+};
+
+/* ── State ──────────────────────────────────────────────────────────────── */
+let currentRole = "analyst";
+let chartInstance = null;
+let hasMessages = false;
+
+/* ── Role switch ────────────────────────────────────────────────────────── */
+function switchRole(role) {
+  currentRole = role;
+  const badge = document.getElementById("roleBadge");
+  badge.className = `role-badge ${role}`;
+  badge.textContent = role;
+}
+
+/* ── Panel toggles ──────────────────────────────────────────────────────── */
+function togglePanel(name) {
+  const map = { schema: "schemaPanel", graph: "graphPanel", audit: "auditPanel" };
+  const el = document.getElementById(map[name]);
+  el.classList.toggle("open");
+}
+
+/* ── Textarea auto-resize ───────────────────────────────────────────────── */
+function autoResize(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 120) + "px";
+}
+
+/* ── Key handler ────────────────────────────────────────────────────────── */
+function handleKey(e) {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+/* ── Suggestions ────────────────────────────────────────────────────────── */
+function sendSuggestion(text) {
+  document.getElementById("input").value = text;
+  sendMessage();
+}
+
+/* ── Send message ───────────────────────────────────────────────────────── */
+function sendMessage() {
+  const input = document.getElementById("input");
+  const text = input.value.trim();
+  if (!text) return;
+
+  showChat();
+  appendMessage("user", text);
+  input.value = "";
+  input.style.height = "auto";
+
+  // Show typing…
+  const typingId = appendTyping();
+
+  setTimeout(() => {
+    removeTyping(typingId);
+    const key = Object.keys(SCENARIOS).find(k => text.toLowerCase().includes(k));
+
+    if (!key) {
+      // Unknown query fallback
+      if (currentRole === "analyst" && /insert|add|update|delete|remove/i.test(text)) {
+        appendAgentMessage({
+          route: "write",
+          agent: "orchestrator",
+          text: `⚠️ Access denied. Your current role is **analyst** — write operations (create, update, delete) are not permitted.\n\nSwitch to **editor** or **admin** role to perform write operations.`
+        });
+      } else {
+        appendAgentMessage({
+          route: "query",
+          agent: "viz_agent",
+          text: "I couldn't find matching data for that query in the demo. Try one of the suggestion chips above, or connect a real database.",
+        });
+      }
+      return;
+    }
+
+    const scenario = SCENARIOS[key];
+
+    // Role check for write ops
+    if (scenario.route === "write") {
+      const writeRoles = ["admin", "editor"];
+      if (!writeRoles.includes(currentRole)) {
+        appendAgentMessage({
+          route: "write",
+          agent: "orchestrator",
+          text: `⚠️ Access denied. Your current role is **${currentRole}** — write operations are not permitted.\n\nSwitch to **editor** or **admin** to perform this action.`
+        });
+        return;
+      }
+    }
+
+    appendAgentMessage(scenario);
+  }, 1200 + Math.random() * 600);
+}
+
+/* ── UI helpers ─────────────────────────────────────────────────────────── */
+function showChat() {
+  if (!hasMessages) {
+    document.getElementById("welcomeScreen").style.display = "none";
+    document.getElementById("messages").style.display = "flex";
+    hasMessages = true;
+  }
+}
+
+function clearChat() {
+  document.getElementById("messages").innerHTML = "";
+  document.getElementById("messages").style.display = "none";
+  document.getElementById("welcomeScreen").style.display = "flex";
+  hasMessages = false;
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+}
+
+function appendMessage(role, text) {
+  const msgs = document.getElementById("messages");
+  const div = document.createElement("div");
+  div.className = `msg ${role}`;
+
+  const avatar = role === "user" ? "👤" : "🤖";
+  div.innerHTML = `
+    <div class="avatar">${avatar}</div>
+    <div class="bubble">${escHtml(text).replace(/\n/g,"<br>")}</div>
+  `;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function appendTyping() {
+  const msgs = document.getElementById("messages");
+  const id = "typing-" + Date.now();
+  const div = document.createElement("div");
+  div.className = "msg agent";
+  div.id = id;
+  div.innerHTML = `
+    <div class="avatar">🤖</div>
+    <div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>
+  `;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return id;
+}
+
+function removeTyping(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+const routeLabels = { schema: "Schema Agent", query: "Query Agent", write: "Write Agent", viz: "Viz Agent" };
+const agentRouteMap = { schema_agent: "schema", query_agent: "query", write_agent: "write", viz_agent: "viz", orchestrator: "write" };
+
+function appendAgentMessage(scenario) {
+  const msgs = document.getElementById("messages");
+  const div = document.createElement("div");
+  div.className = "msg agent";
+
+  const routeKey = scenario.route;
+  const agentLabel = routeLabels[agentRouteMap[scenario.agent] || routeKey] || "Agent";
+  const routeIcon = { schema:"📐", query:"🔍", write:"✏️", viz:"📊" }[routeKey] || "🤖";
+
+  let inner = `
+    <div class="route-badge ${routeKey}">${routeIcon} ${agentLabel}</div>
+    <div>${markdownLite(scenario.text)}</div>
+  `;
+
+  if (scenario.table) {
+    inner += buildTable(scenario.table);
+  }
+
+  if (scenario.chart) {
+    const cid = "chart-" + Date.now();
+    inner += `<div class="chart-wrap"><canvas id="${cid}"></canvas></div>`;
+    setTimeout(() => renderChart(cid, scenario.chart), 50);
+  }
+
+  if (scenario.summary) {
+    inner += `<div style="margin-top:8px;color:var(--muted);font-size:13px;font-style:italic">${escHtml(scenario.summary)}</div>`;
+  }
+
+  if (scenario.confirm) {
+    inner += `
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button onclick="confirmWrite(this)" style="padding:6px 14px;background:#00d4aa22;border:1px solid var(--accent2);border-radius:8px;color:var(--accent2);cursor:pointer;font-size:13px">✅ Confirm</button>
+        <button onclick="cancelWrite(this)" style="padding:6px 14px;background:#ff5c5c22;border:1px solid var(--danger);border-radius:8px;color:var(--danger);cursor:pointer;font-size:13px">❌ Cancel</button>
+      </div>
+    `;
+  }
+
+  div.innerHTML = `<div class="avatar">🤖</div><div class="bubble">${inner}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function confirmWrite(btn) {
+  btn.closest(".bubble").querySelector("div:last-child").innerHTML =
+    `<span style="color:var(--accent2)">✅ Record inserted successfully into <strong>employees</strong>.</span>`;
+}
+
+function cancelWrite(btn) {
+  btn.closest(".bubble").querySelector("div:last-child").innerHTML =
+    `<span style="color:var(--muted)">Operation cancelled.</span>`;
+}
+
+/* ── Table builder ──────────────────────────────────────────────────────── */
+function buildTable(t) {
+  const ths = t.headers.map(h => `<th>${escHtml(h)}</th>`).join("");
+  const trs = t.rows.map(row =>
+    `<tr>${row.map(c => `<td>${escHtml(String(c))}</td>`).join("")}</tr>`
+  ).join("");
+  return `<div class="data-table-wrap"><table class="data-table"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
+}
+
+/* ── Chart renderer ─────────────────────────────────────────────────────── */
+function renderChart(id, cfg) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  new Chart(canvas, {
+    type: cfg.type,
+    data: {
+      labels: cfg.labels,
+      datasets: [{
+        label: cfg.label,
+        data: cfg.data,
+        backgroundColor: [
+          "#6c63ff","#00d4aa","#60a5fa","#f5a623","#c084fc",
+          "#ff5c5c","#34d399","#fbbf24","#a78bfa","#38bdf8"
+        ],
+        borderRadius: 5,
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { labels: { color: "#e2e4f0", font: { size: 11 } } }
+      },
+      scales: cfg.type !== "pie" ? {
+        x: { ticks: { color: "#7a7f9a" }, grid: { color: "#2e3352" } },
+        y: { ticks: { color: "#7a7f9a" }, grid: { color: "#2e3352" } }
+      } : {}
+    }
+  });
+}
+
+/* ── Utils ──────────────────────────────────────────────────────────────── */
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;");
+}
+
+function markdownLite(s) {
+  // Bold, inline code, line breaks
+  return escHtml(s)
+    .replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>")
+    .replace(/`(.+?)`/g,"<code style='background:#1e2235;padding:1px 5px;border-radius:4px;font-size:12px'>$1</code>")
+    .replace(/\n- /g,"<br>• ")
+    .replace(/\n/g,"<br>");
+}
+</script>
+</body>
+</html>

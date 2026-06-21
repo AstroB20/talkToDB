@@ -1,0 +1,47 @@
+# ── TalktoDB — FastAPI Backend ────────────────────────────────────────────
+# Serves the LangGraph A2A multi-agent system.
+# Endpoints: /chat (SSE), /databases, /schema, /audit, /graph, /health
+#
+# Build:
+#   docker build -f Dockerfile.api -t talktodb-api .
+#
+# Run locally:
+#   docker run --env-file .env -p 8000:8000 talktodb-api
+#
+# Cloud Run note:
+#   Cloud Run injects $PORT. The CMD below binds uvicorn on that port.
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM python:3.11-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# ── Install dependencies ──────────────────────────────────────────────────
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ── Copy everything the API + agent layer needs ───────────────────────────
+COPY api/          ./api/
+COPY agent/        ./agent/
+COPY db/           ./db/
+COPY mcp_server/   ./mcp_server/
+COPY config/       ./config/
+# data/ is volume-mounted at runtime so uploaded files persist on the host
+RUN mkdir -p /app/data /app/logs
+
+# ── Create non-root user ──────────────────────────────────────────────────
+RUN adduser --disabled-password --gecos "" --uid 1001 appuser \
+    && chown -R appuser:appuser /app
+
+USER appuser
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT:-8000}/health')" || exit 1
+
+# Bind on $PORT (Cloud Run) or 8000 (local)
+CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

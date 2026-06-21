@@ -1,0 +1,24 @@
+# ── Dataset Registry ──────────────────────────────────────────────────────────
+#
+# Any CSV or JSON file dropped into the data/ folder is automatically
+# discovered and available for querying — no entry here is required.
+#
+# Use this file to give a custom alias or description to a specific file,
+# or to reference a file that lives outside the data/ directory.
+#
+# Example:
+#
+# databases:
+#   titanic:
+#     driver: csv
+#     file: "data/titanic.csv"
+#     description: "Titanic passenger survival dataset from Kaggle"
+#
+#   products:
+#     driver: json
+#     file: "data/products.json"
+#     description: "Product catalog"
+# ─────────────────────────────────────────────────────────────────────────────
+
+databases: {}
+

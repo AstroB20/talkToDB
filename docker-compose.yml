@@ -1,0 +1,62 @@
+# ── TalktoDB — Local Development Stack ────────────────────────────────────
+# Runs api + ui as a monolith (no separate MCP server).
+#
+# Usage:
+#   cp .env.example .env        # fill in GEMINI_API_KEY
+#   docker compose up --build
+#
+# Services:
+#   api  → http://localhost:8000  (docs at /docs)
+#   ui   → http://localhost:8501
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── FastAPI Backend ────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: talktodb-api
+    container_name: talktodb-api
+    env_file: .env
+    environment:
+      PORT: "8000"
+      AGENT_ROLE: "${AGENT_ROLE:-admin}"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config:/app/config:ro
+      - ./data:/app/data          # datasets live here; mount rw so uploads persist
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    restart: unless-stopped
+
+  # ── Streamlit UI ───────────────────────────────────────────────────────
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    image: talktodb-ui
+    container_name: talktodb-ui
+    env_file: .env
+    environment:
+      PORT: "8501"
+      API_URL: "http://api:8000"   # internal Docker network URL
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+# ── Shared network (services refer to each other by service name) ──────────
+networks:
+  default:
+    name: talktodb-network
+

@@ -1,0 +1,12 @@
+roles:
+  admin:
+    allowed_operations: [read, create, update, delete]
+    description: "Full access — all CRUD operations permitted"
+
+  editor:
+    allowed_operations: [read, create, update]
+    description: "Can read, insert, and update — cannot delete"
+
+  analyst:
+    allowed_operations: [read]
+    description: "Read-only access — SELECT queries only"

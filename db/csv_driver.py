@@ -1,0 +1,65 @@
+import os
+from pathlib import Path
+from typing import Any
+
+import duckdb
+
+from db.base import BaseDriver
+
+
+class CSVDriver(BaseDriver):
+    """
+    SQL access to a CSV file via DuckDB.
+
+    The file is loaded into an in-memory DuckDB table named after the file stem
+    (e.g. ``sales_data.csv`` → table ``sales_data``).  SELECT queries run
+    against that table; INSERT / UPDATE / DELETE changes are flushed back to
+    the original CSV automatically.
+    """
+
+    placeholder = "?"
+
+    def __init__(self, file_path: str) -> None:
+        self._file_path = os.path.abspath(file_path)
+        self._table = Path(file_path).stem
+        self._conn: duckdb.DuckDBPyConnection | None = None
+
+    def connect(self) -> None:
+        self._conn = duckdb.connect()
+        self._conn.execute(
+            f"CREATE TABLE \"{self._table}\" AS "
+            f"SELECT * FROM read_csv_auto('{self._file_path}')"
+        )
+
+    def _get_conn(self) -> duckdb.DuckDBPyConnection:
+        if self._conn is None:
+            self.connect()
+        return self._conn
+
+    def execute(self, query: str, params: tuple = ()) -> list[dict[str, Any]]:
+        conn = self._get_conn()
+        rel = conn.execute(query, list(params))
+
+        is_write = query.strip().upper().split()[0] in ("INSERT", "UPDATE", "DELETE")
+        if is_write:
+            # Persist changes back to the CSV file
+            conn.execute(
+                f"COPY \"{self._table}\" TO '{self._file_path}' (HEADER, DELIMITER ',')"
+            )
+            return []
+
+        if rel.description:
+            cols = [d[0] for d in rel.description]
+            return [dict(zip(cols, row)) for row in rel.fetchall()]
+        return []
+
+    def fetch_schema(self) -> dict[str, list[str]]:
+        conn = self._get_conn()
+        result = conn.execute(f"DESCRIBE \"{self._table}\"")
+        cols = [row[0] for row in result.fetchall()]
+        return {self._table: cols}
+
+    def close(self) -> None:
+        if self._conn:
+            self._conn.close()
+            self._conn = None

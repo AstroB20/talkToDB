@@ -1,0 +1,41 @@
+# Secrets — never copy into images
+.env
+certs/
+*.pem
+*.key
+*.p12
+*.pfx
+service-account*.json
+
+# Data & logs — ephemeral, not for images
+data/
+logs/
+
+# Python noise
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Dev & tooling
+.git/
+.gitignore
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Not needed in any image
+mockup.html
+README.md
