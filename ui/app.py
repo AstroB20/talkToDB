@@ -227,7 +227,7 @@ with st.sidebar:
             "Loads the **Titanic** dataset from GitHub and runs three "
             "example queries so you can see the agent in action."
         )
-        if st.button("🚀 Load Demo", use_container_width=True):
+        if st.button("🚀 Load Demo", use_container_width=True, key="load_demo"):
             with st.spinner("Downloading Titanic dataset..."):
                 try:
                     csv_resp = httpx.get(_DEMO_CSV_URL, timeout=30, follow_redirects=True)
@@ -255,7 +255,7 @@ with st.sidebar:
         label_visibility="collapsed",
     )
     if uploaded_file is not None:
-        if st.button("⬆️ Upload"):
+        if st.button("⬆️ Upload", key="upload"):
             try:
                 resp = httpx.post(
                     f"{_API_BASE}/upload",
@@ -312,7 +312,7 @@ with st.sidebar:
     st.divider()
 
     # Schema inspector
-    if st.button("🔍 View Schema", disabled=not selected_db):
+    if st.button("🔍 View Schema", disabled=not selected_db, key="view_schema"):
         try:
             schema_resp = httpx.get(f"{_API_BASE}/schema/{selected_db}", timeout=5)
             schema_resp.raise_for_status()
@@ -325,7 +325,7 @@ with st.sidebar:
             st.error(str(exc))
 
     # Audit log viewer
-    if st.button("📜 View Audit Log"):
+    if st.button("📜 View Audit Log", key="view_audit_log"):
         try:
             audit_resp = httpx.get(f"{_API_BASE}/audit?limit=100", timeout=5)
             audit_resp.raise_for_status()
@@ -338,7 +338,7 @@ with st.sidebar:
             st.error(str(exc))
 
     # Clear chat history
-    if st.button("🗑️ Clear Chat"):
+    if st.button("🗑️ Clear Chat", key="clear_chat"):
         st.session_state.messages = []
         st.rerun()
 
@@ -445,185 +445,3 @@ def _render_content(content: str) -> None:
             if part.strip():
                 st.markdown(part)
 
-
-# ---------------------------------------------------------------------------
-# Page config
-# ---------------------------------------------------------------------------
-
-st.set_page_config(page_title="TalktoDB", page_icon="🗄️", layout="wide")
-st.title("🗄️ TalktoDB")
-
-# ---------------------------------------------------------------------------
-# Sidebar
-# ---------------------------------------------------------------------------
-
-with st.sidebar:
-    st.header("Settings")
-
-    # ── Demo ───────────────────────────────────────────────────────────────
-    with st.expander("▶ Try the Demo", expanded=False):
-        st.caption(
-            "Loads the **Titanic** dataset from GitHub and runs three "
-            "example queries so you can see the agent in action."
-        )
-        if st.button("🚀 Load Demo", use_container_width=True):
-            with st.spinner("Downloading Titanic dataset..."):
-                try:
-                    csv_resp = httpx.get(_DEMO_CSV_URL, timeout=30, follow_redirects=True)
-                    csv_resp.raise_for_status()
-                    upload_resp = httpx.post(
-                        f"{_API_BASE}/upload",
-                        files={"file": (f"{_DEMO_ALIAS}.csv", csv_resp.content, "text/csv")},
-                        timeout=30,
-                    )
-                    upload_resp.raise_for_status()
-                    st.session_state.messages = []
-                    st.session_state.demo_db = _DEMO_ALIAS
-                    st.session_state.demo_queries = list(_DEMO_QUERIES)
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"Demo failed: {exc}")
-
-    st.divider()
-
-    # ── Upload Dataset ─────────────────────────────────────────────────────
-    st.subheader("Upload Dataset")
-    uploaded_file = st.file_uploader(
-        "Drop a CSV or JSON file (e.g. from Kaggle)",
-        type=["csv", "json"],
-        label_visibility="collapsed",
-    )
-    if uploaded_file is not None:
-        if st.button("⬆️ Upload"):
-            try:
-                resp = httpx.post(
-                    f"{_API_BASE}/upload",
-                    files={
-                        "file": (
-                            uploaded_file.name,
-                            uploaded_file.getvalue(),
-                            uploaded_file.type or "application/octet-stream",
-                        )
-                    },
-                    timeout=30,
-                )
-                resp.raise_for_status()
-                result = resp.json()
-                st.success(f"✅ Uploaded as alias **'{result['alias']}'**")
-                st.rerun()
-            except Exception as exc:
-                st.error(f"Upload failed: {exc}")
-
-    st.divider()
-
-    # ── Dataset selector ───────────────────────────────────────────────────
-    # Fetch dataset list from the API
-    try:
-        db_resp = httpx.get(f"{_API_BASE}/databases", timeout=5)
-        db_resp.raise_for_status()
-        databases = db_resp.json()
-        db_options = {d["alias"]: f"{d['alias']}  ({d['driver']})" for d in databases}
-    except Exception:
-        db_options = {}
-        st.error("⚠️ Cannot reach the API server. Is it running on port 8000?")
-
-    # Pre-select the demo dataset if the demo was just loaded
-    _demo_db = st.session_state.get("demo_db")
-    _default_index = 0
-    if _demo_db and _demo_db in db_options:
-        _default_index = list(db_options.keys()).index(_demo_db)
-
-    selected_db: str = st.selectbox(
-        "Target Dataset",
-        options=list(db_options.keys()),
-        index=_default_index,
-        format_func=lambda k: db_options.get(k, k),
-        disabled=not db_options,
-    )
-
-    # Show current role
-    try:
-        health = httpx.get(f"{_API_BASE}/health", timeout=3).json()
-        st.info(f"Role: **{health.get('role', 'unknown')}**")
-    except Exception:
-        pass
-
-    st.divider()
-
-    # Schema inspector
-    if st.button("🔍 View Schema", disabled=not selected_db):
-        try:
-            schema_resp = httpx.get(f"{_API_BASE}/schema/{selected_db}", timeout=5)
-            schema_resp.raise_for_status()
-            schema = schema_resp.json().get("schema", {})
-            for table, cols in schema.items():
-                with st.expander(f"📋 {table}"):
-                    for col in cols:
-                        st.text(f"  • {col}")
-        except Exception as exc:
-            st.error(str(exc))
-
-    # Audit log viewer
-    if st.button("📜 View Audit Log"):
-        try:
-            audit_resp = httpx.get(f"{_API_BASE}/audit?limit=100", timeout=5)
-            audit_resp.raise_for_status()
-            entries = audit_resp.json()
-            if entries:
-                st.dataframe(pd.DataFrame(entries), use_container_width=True)
-            else:
-                st.info("No audit entries yet.")
-        except Exception as exc:
-            st.error(str(exc))
-
-    # Clear chat history
-    if st.button("🗑️ Clear Chat"):
-        st.session_state.messages = []
-        st.rerun()
-
-# ---------------------------------------------------------------------------
-# Chat history
-# ---------------------------------------------------------------------------
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        _render_content(msg["content"])
-
-# ---------------------------------------------------------------------------
-# Auto-run demo queries (fires once per query after demo is loaded)
-# ---------------------------------------------------------------------------
-
-if st.session_state.get("demo_queries") and selected_db == _DEMO_ALIAS:
-    next_query = st.session_state.demo_queries.pop(0)
-    if not st.session_state.demo_queries:
-        # All demo queries consumed — clean up demo state
-        st.session_state.pop("demo_db", None)
-        st.session_state.pop("demo_queries", None)
-
-    st.session_state.messages.append({"role": "user", "content": next_query})
-    with st.chat_message("user"):
-        st.markdown(next_query)
-    with st.chat_message("assistant"):
-        reply = _stream_response(next_query, selected_db)
-    st.session_state.messages.append({"role": "assistant", "content": reply})
-
-    # Pause briefly so Streamlit renders each message before firing the next
-    if st.session_state.get("demo_queries"):
-        st.rerun()
-
-# ---------------------------------------------------------------------------
-# Chat input
-# ---------------------------------------------------------------------------
-
-if prompt := st.chat_input(
-    "Ask about your data...", disabled=not db_options
-):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    with st.chat_message("assistant"):
-        reply = _stream_response(prompt, selected_db)
-    st.session_state.messages.append({"role": "assistant", "content": reply})
