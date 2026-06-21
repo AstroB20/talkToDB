@@ -11,80 +11,41 @@ steps:
 
   # -- Build -----------------------------------------------------------------
 
-  - id: build-api
+  - id: build
     name: gcr.io/cloud-builders/docker
-    waitFor: ["-"]
-    args: [build, -f, Dockerfile.api,
-           -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-api:$COMMIT_SHA",
-           -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-api:latest", .]
-
-  - id: build-ui
-    name: gcr.io/cloud-builders/docker
-    waitFor: ["-"]
-    args: [build, -f, Dockerfile.ui,
-           -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-ui:$COMMIT_SHA",
-           -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-ui:latest", .]
+    args: [build, -f, Dockerfile,
+           -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb:$COMMIT_SHA",
+           -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb:latest", .]
 
   # -- Push ------------------------------------------------------------------
 
-  - id: push-api
+  - id: push
     name: gcr.io/cloud-builders/docker
-    waitFor: [build-api]
-    args: [push, --all-tags, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-api"]
+    waitFor: [build]
+    args: [push, --all-tags, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb"]
 
-  - id: push-ui
-    name: gcr.io/cloud-builders/docker
-    waitFor: [build-ui]
-    args: [push, --all-tags, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-ui"]
+  # -- Deploy ----------------------------------------------------------------
 
-  # -- Deploy API ------------------------------------------------------------
-
-  - id: deploy-api
+  - id: deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    waitFor: [push-api]
+    waitFor: [push]
     entrypoint: gcloud
     args:
       - run
       - deploy
-      - talktodb-api
-      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-api:$COMMIT_SHA
+      - talktodb
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb:$COMMIT_SHA
       - --region=${_REGION}
       - --platform=managed
       - --allow-unauthenticated
-      - --ingress=internal
+      - --ingress=all
       - --memory=1Gi
       - --cpu=1
       - --min-instances=0
       - --max-instances=10
       - --timeout=300
-      - --set-env-vars=AGENT_ROLE=${_AGENT_ROLE}
+      - --set-env-vars=AGENT_ROLE=${_AGENT_ROLE},API_URL=http://localhost:8000
       - --set-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest
 
-  # -- Deploy UI (injects API URL) -------------------------------------------
-
-  - id: deploy-ui
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    waitFor: [deploy-api, push-ui]
-    entrypoint: bash
-    args:
-      - -c
-      - |
-          API_URL=$(gcloud run services describe talktodb-api \
-            --region=${_REGION} \
-            --format='value(status.url)')
-          gcloud run deploy talktodb-ui \
-            --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-ui:$COMMIT_SHA \
-            --region=${_REGION} \
-            --platform=managed \
-            --allow-unauthenticated \
-            --ingress=all \
-            --memory=512Mi \
-            --cpu=1 \
-            --min-instances=0 \
-            --max-instances=5 \
-            --timeout=60 \
-            --set-env-vars="API_URL=$${API_URL}"
-
 images:
-  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-api:$COMMIT_SHA
-  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-ui:$COMMIT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb:$COMMIT_SHA
