@@ -50,7 +50,7 @@ steps:
       - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-api:$COMMIT_SHA
       - --region=${_REGION}
       - --platform=managed
-      - --no-allow-unauthenticated
+      - --allow-unauthenticated
       - --ingress=internal
       - --memory=1Gi
       - --cpu=1
