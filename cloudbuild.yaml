@@ -323,7 +323,7 @@ steps:
             --region=${_REGION} \
             --format='value(status.url)')
 
-          echo "MCP server URL: $MCP_URL"
+          echo "MCP server URL: $$MCP_URL"
 
           gcloud run deploy talktodb-api \
             --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/talktodb-api:$COMMIT_SHA \
