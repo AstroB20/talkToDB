@@ -24,15 +24,54 @@ from typing import AsyncIterator
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from dotenv import load_dotenv
+
+load_dotenv()
+
+# Use the Windows certificate store so Lilly's SSL proxy is trusted
+try:
+    import truststore
+    truststore.inject_into_ssl()
+    print("[ssl] truststore: using Windows certificate store", flush=True)
+except ImportError:
+    # Fallback: extract Windows certs via stdlib and append to certifi's bundle
+    try:
+        import base64
+        import ssl
+        import tempfile
+        import certifi
+
+        pem_certs = []
+        for store in ("CA", "ROOT"):
+            for cert_der, enc, _ in ssl.enum_certificates(store):
+                if enc == "x509_asn":
+                    b64 = base64.encodebytes(cert_der).decode("ascii")
+                    pem_certs.append(f"-----BEGIN CERTIFICATE-----\n{b64}-----END CERTIFICATE-----\n")
+
+        if pem_certs:
+            with open(certifi.where(), "r", encoding="utf-8") as f:
+                base_bundle = f.read()
+            combined = base64.b64decode  # just a ref to keep linter happy — not used
+            tmp = tempfile.NamedTemporaryFile(
+                mode="w", suffix=".pem", delete=False, encoding="utf-8"
+            )
+            tmp.write(base_bundle + "\n" + "\n".join(pem_certs))
+            tmp.close()
+            os.environ.setdefault("SSL_CERT_FILE", tmp.name)
+            os.environ.setdefault("REQUESTS_CA_BUNDLE", tmp.name)
+            os.environ.setdefault("CURL_CA_BUNDLE", tmp.name)
+            print(f"[ssl] fallback: wrote {len(pem_certs)} Windows certs to {tmp.name}", flush=True)
+    except Exception as _ssl_err:
+        print(f"[ssl] Warning: could not patch SSL certs — {_ssl_err}", flush=True)
+
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-load_dotenv()
-
 from db import list_databases, load_driver
+from db.profiler import profile_dataset
 from agent.graph import stream_agent_response
+from agent.subagents.report_agent import run_report
 
 app = FastAPI(title="TalktoDB", version="2.0.0")
 
@@ -51,6 +90,11 @@ _ALLOWED_EXTENSIONS = {".csv", ".json"}
 class ChatRequest(BaseModel):
     message: str
     db_alias: str
+
+
+class ReportRequest(BaseModel):
+    db_alias: str
+    focus: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -74,6 +118,17 @@ def get_schema(db_alias: str):
         schema = driver.fetch_schema()
         driver.close()
         return {"db_alias": db_alias, "schema": schema}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/profile/{db_alias}")
+def get_profile(db_alias: str):
+    """Return a statistical profile of a dataset (row count, column types, null rates, distributions)."""
+    try:
+        return profile_dataset(db_alias)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
@@ -137,6 +192,16 @@ async def chat(request: ChatRequest):
         yield {"data": "[DONE]"}
 
     return EventSourceResponse(event_generator())
+
+
+@app.post("/report")
+async def report(request: ReportRequest):
+    """Generate a full autonomous multi-section analysis report for a dataset."""
+    try:
+        result = await run_report(request.db_alias, request.focus)
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/audit")

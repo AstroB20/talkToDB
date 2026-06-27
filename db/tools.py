@@ -14,6 +14,27 @@ from db import load_driver
 from mcp_server.audit import log_operation
 
 
+_READ_ONLY_KEYWORDS = {"INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "TRUNCATE", "REPLACE", "MERGE"}
+_MAX_ROWS = 2000
+
+
+def _is_read_only(sql: str) -> bool:
+    """Return True if the SQL contains only read operations (SELECT or CTEs)."""
+    normalized = sql.strip().upper()
+    # Strip leading CTE (WITH ...) blocks to find the actual statement verb
+    if normalized.startswith("WITH"):
+        # Find the first SELECT after the CTE preamble
+        idx = normalized.find("SELECT")
+        if idx == -1:
+            return False
+        normalized = normalized[idx:]
+    if not normalized.startswith("SELECT"):
+        return False
+    # Reject if any write keyword appears as a standalone token
+    tokens = set(normalized.split())
+    return not tokens.intersection(_READ_ONLY_KEYWORDS - {"SELECT"})
+
+
 @tool
 def db_read(db_alias: str, sql_query: str) -> str:
     """
@@ -22,13 +43,13 @@ def db_read(db_alias: str, sql_query: str) -> str:
     Args:
         db_alias: Dataset alias — either the file stem (e.g. 'sales_data' for
                   sales_data.csv) or an alias defined in config/databases.yaml.
-        sql_query: A valid SELECT statement.  The table name must match the
-                   file stem (e.g. SELECT * FROM sales_data LIMIT 10).
+        sql_query: A valid SELECT statement (or CTE + SELECT).  The table name
+                   must match the file stem (e.g. SELECT * FROM sales_data LIMIT 10).
 
     Returns:
-        JSON array of result rows as a string.
+        JSON array of result rows as a string (capped at 2000 rows).
     """
-    if not sql_query.strip().upper().startswith("SELECT"):
+    if not _is_read_only(sql_query):
         log_operation("read", db_alias, sql_query, 0, False, "Non-SELECT query rejected")
         raise ValueError("Only SELECT statements are permitted in db_read.")
 
@@ -36,11 +57,12 @@ def db_read(db_alias: str, sql_query: str) -> str:
         driver = load_driver(db_alias)
         rows = driver.execute(sql_query)
         driver.close()
-        log_operation("read", db_alias, sql_query, len(rows), True)
-        return json.dumps(rows, default=str)
+        truncated = rows[:_MAX_ROWS]
+        log_operation("read", db_alias, sql_query, len(truncated), True)
+        return json.dumps(truncated, default=str)
     except Exception as exc:
         log_operation("read", db_alias, sql_query, 0, False, str(exc))
-        raise
+        raise ValueError(f"Query error: {exc}") from exc
 
 
 @tool
@@ -68,7 +90,7 @@ def db_create(db_alias: str, table: str, data: dict) -> str:
         return f"Inserted 1 record into '{table}'."
     except Exception as exc:
         log_operation("create", db_alias, query, 0, False, str(exc))
-        raise
+        raise ValueError(f"Insert failed: {exc}") from exc
 
 
 @tool
@@ -106,7 +128,7 @@ def db_update(
         return f"Updated records in '{table}' where {where_conditions}."
     except Exception as exc:
         log_operation("update", db_alias, query, 0, False, str(exc))
-        raise
+        raise ValueError(f"Update failed: {exc}") from exc
 
 
 @tool
@@ -151,4 +173,4 @@ def db_delete(
         return f"Deleted records from '{table}' where {where_conditions}."
     except Exception as exc:
         log_operation("delete", db_alias, query, 0, False, str(exc))
-        raise
+        raise ValueError(f"Delete failed: {exc}") from exc

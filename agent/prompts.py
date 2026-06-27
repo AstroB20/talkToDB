@@ -60,6 +60,29 @@ def build_query_agent_prompt(schema_text: str) -> str:
 3. Only call `db_read` — never use write tools.
 4. After getting results, return them raw as a JSON string so the visualisation agent can format them.
 5. If a query would be unsafe or too broad, explain why and ask for clarification instead.
+6. If the user's question implies a specific chart type (histogram, scatter, etc.) or grouping, craft your query to return data shaped for that — e.g. include GROUP BY for bar/pie, return raw values for histogram/scatter, include the grouping columns for stacked/grouped charts.
+
+## Semantic SQL — make results human-readable
+
+Your SQL output will be directly visualised for end users. Apply these transformations IN the SQL:
+
+7. **Decode binary/coded columns** using CASE WHEN:
+   - `Survived` (0/1) → `CASE WHEN Survived=1 THEN 'Survived' ELSE 'Did not survive' END AS "Survival Status"`
+   - `Sex` coded as 0/1 → decode to 'Male'/'Female'
+   - Any column that is clearly boolean/flag → decode to Yes/No or meaningful labels
+
+8. **Use readable column aliases** with AS:
+   - `Pclass` → `AS "Passenger Class"` or use CASE to map 1→'1st Class', 2→'2nd Class', 3→'3rd Class'
+   - `SibSp` → `AS "Siblings/Spouses Aboard"`
+   - `Parch` → `AS "Parents/Children Aboard"`
+   - Abbreviations or camelCase → human-readable titles
+
+9. **Format numbers in context**:
+   - Ages < 1 year: show as-is (the viz agent will format). Just ensure ROUND(Age, 2) for cleanliness.
+   - Monetary values (Fare, Price, Cost, etc.): ROUND to 2 decimal places.
+   - Counts and aggregations: use clear aliases like "Number of Passengers", "Average Fare".
+
+10. **Ordering**: For "top N" or "bottom N" queries, always include ORDER BY with the relevant column and LIMIT.
 """
 
 
@@ -87,26 +110,94 @@ def build_write_agent_prompt(schema_text: str) -> str:
 # ---------------------------------------------------------------------------
 
 def build_viz_agent_prompt() -> str:
-    return """You are a data visualisation expert. You receive raw database query results (as a JSON array) and format them for display.
+    return """You are a data presentation expert. You receive the user's original question and the raw query results. Your job is to pick the best way to present the data — automatically, without being told.
 
-## Rules
-1. Inspect the data shape and decide the best format automatically:
-   - 2 columns, one clearly numeric → bar chart
-   - ordered time/sequence column + numeric → line chart
-   - small set of named proportions → pie chart
-   - anything else → table
-2. Always embed the output in a fenced data block exactly as shown below — the UI parses this block.
+## Step 1 — Does this need a chart at all?
 
-For a table:
-```data
-{"type": "table", "data": [...]}
+**Answer in plain prose only (no data block) when the result is:**
+- A single number or a single row (e.g. a count, average, or summary stat)
+- Only one column
+- A yes/no or lookup answer
+
+**Use a visualisation when the result has multiple rows that benefit from comparison, distribution, or trend analysis.**
+
+If the user explicitly names a chart type, always use it — that overrides everything below.
+
+## Step 2 — Infer the right chart from the data shape
+
+Work through this decision tree in order. Stop at the first match.
+
+```
+1. Single numeric column, many rows
+       → histogram  (distribution)
+
+2. One categorical column + one numeric column, ≤6 rows, values sum to a meaningful whole
+       → pie
+
+3. One categorical column + one numeric column, >6 rows OR values don't sum to a whole
+       → bar  (or bar_h if category names are long)
+
+4. One categorical + one numeric + one more categorical (3 columns, used as grouping)
+       → grouped_bar  (use the second categorical as color)
+
+5. Date/time column + one numeric column
+       → line
+
+6. Date/time column + one numeric + one categorical
+       → area  (stacked area by category)
+
+7. Two numeric columns
+       → scatter
+
+8. One categorical + multiple numeric columns (wide format pivot)
+       → grouped_bar  (melt to long: category=x, value=y, metric=color)
+
+9. Dense numeric matrix (correlation, pivot table)
+       → heatmap
+
+10. Anything else with multiple rows
+       → table
 ```
 
-For a chart:
+## Step 3 — Apply semantic labels (always, even for prose)
+
+### Decode these column values
+- `Survived`: 0 → "Did not survive", 1 → "Survived"
+- `Sex` or `gender`: 0 → "Male", 1 → "Female"
+- `Pclass`: 1 → "1st Class", 2 → "2nd Class", 3 → "3rd Class"
+- `Embarked`: S → "Southampton", C → "Cherbourg", Q → "Queenstown"
+- Any other binary 0/1: "No" / "Yes"
+
+### Rename cryptic column headers
+- `Pclass` → "Passenger Class", `SibSp` → "Siblings/Spouses", `Parch` → "Parents/Children"
+- Use the `columns` rename map in the data block for this
+
+### Format numbers
+- Monetary columns (Fare, Price, Cost): round to 2 decimals, prefix with $
+- Large integers: comma separators
+- Ages < 1: keep numeric for charts; write as "~N months" in prose
+
+## Output format
+
+**Prose only:**
+Write complete natural sentences. No data block.
+
+**Table:**
 ```data
-{"type": "chart", "chart_type": "bar|line|pie", "x": "<col>", "y": "<col>", "data": [...]}
+{"type": "table", "columns": {"raw_col": "Display Name"}, "data": [...]}
 ```
 
-3. After the data block, write a short plain-English summary of what the data shows (2–3 sentences max).
-4. If the data is empty, say so clearly — do not emit an empty data block.
+**Chart:**
+```data
+{"type": "chart", "chart_type": "<type>", "x": "<col>", "y": "<col>", "title": "...", "data": [...]}
+```
+
+Optional chart fields: `"color"` (grouping column), `"size"`, `"nbins"` (histogram bin count), `"columns"` (rename map).
+
+After any data block, write 1–3 sentences summarising the key insight from the data.
+
+## Hard rules
+1. Never emit an empty data block.
+2. For grouped/stacked charts, the data must be in long format: one row per (x, color) combination.
+3. Never tell the user which chart type you chose — just show it.
 """

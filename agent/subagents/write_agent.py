@@ -35,15 +35,19 @@ async def write_agent_node(state: AgentState) -> dict:
         llm, [db_create, db_update, db_delete], prompt=system_prompt
     )
 
-    result = await inner_agent.ainvoke(
-        {"messages": [HumanMessage(content=f"[Target database: {db_alias}]\n\n{user_text}")]}
-    )
-
-    last_ai = next(
-        (m for m in reversed(result["messages"]) if isinstance(m, AIMessage)),
-        None,
-    )
-    reply = last_ai.content if last_ai else "Operation completed."
+    try:
+        result = await inner_agent.ainvoke(
+            {"messages": [HumanMessage(content=f"[Target database: {db_alias}]\n\n{user_text}")]}
+        )
+        last_ai = next(
+            (m for m in reversed(result["messages"]) if isinstance(m, AIMessage)),
+            None,
+        )
+        reply = last_ai.content if last_ai else "Operation completed."
+    except PermissionError as exc:
+        reply = f"Permission denied: {exc}"
+    except Exception as exc:
+        reply = f"Write operation failed: {exc}"
 
     return {
         "final_response": reply,

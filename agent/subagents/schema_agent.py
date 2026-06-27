@@ -8,7 +8,7 @@ from agent.prompts import build_schema_agent_prompt
 from agent.schema_loader import load_all_schemas, format_schema_for_prompt
 
 
-def schema_agent_node(state: AgentState) -> dict:
+async def schema_agent_node(state: AgentState) -> dict:
     """
     Answers questions about database structure — tables, columns, relationships.
     Does not call any tools; uses its schema-enriched context to respond directly.
@@ -29,14 +29,17 @@ def schema_agent_node(state: AgentState) -> dict:
     )
     user_text = last_human.content if last_human else ""
 
-    response = llm.invoke(
-        [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_text),
-        ]
-    )
+    try:
+        response = await llm.ainvoke(
+            [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_text),
+            ]
+        )
+        reply = response.content
+    except Exception as exc:
+        reply = f"I couldn't retrieve schema information right now. Error: {exc}"
 
-    reply = response.content
     return {
         "final_response": reply,
         "messages": [AIMessage(content=reply, name="schema_agent")],

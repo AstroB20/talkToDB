@@ -10,12 +10,19 @@ class AgentState(TypedDict):
     # The database alias chosen in the UI
     db_alias: str
 
+    # The user's original question — passed to viz_agent for semantic context
+    user_question: str
+
     # Orchestrator sets this to route to the right sub-agent
     # "schema" | "read" | "write" | "end"
     intent: str
 
     # Raw JSON string of query results; set by query_agent, consumed by viz_agent
     query_results: str
+
+    # Whether query results need visualisation (set by query_agent)
+    # True = route to viz_agent; False = query_agent's response is final
+    needs_viz: bool
 
     # Final rendered response assembled by the terminal agent (schema/write/viz)
     final_response: str
